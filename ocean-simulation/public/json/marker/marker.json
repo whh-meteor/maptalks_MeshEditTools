@@ -1,0 +1,41 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 2,
+        "name": "渤海"
+      },
+      "geometry": {
+        "coordinates": [119.8574028002908, 38.69073440752635],
+        "type": "Point"
+      },
+      "id": 0
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 3,
+        "name": "东海"
+      },
+      "geometry": {
+        "coordinates": [123.92921452997098, 30.526876285997815],
+        "type": "Point"
+      },
+      "id": 1
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": 1,
+        "name": "黄海"
+      },
+      "geometry": {
+        "coordinates": [123.32186414528422, 35.53471036006151],
+        "type": "Point"
+      },
+      "id": 2
+    }
+  ]
+}

@@ -1,0 +1,417 @@
+import * as turf from '@turf/turf'
+import 'maptalks/dist/maptalks.css' // 导入 maptalks 的 CSS 样式
+import maprequest from '@/api/maprequest.js'
+var map = window.map
+/**
+ * 添加mesh节点
+ */
+let meshNodeLayer // 保存图层引用
+
+function addMeshNode(meshNodes) {
+  console.log('加载网格节点')
+  console.log(meshNodes)
+  const style = [
+    {
+      filter: true,
+      renderPlugin: {
+        dataConfig: {
+          type: 'point'
+        },
+        sceneConfig: {
+          collision: false,
+          fading: false,
+          depthFunc: 'always'
+        },
+        type: 'icon'
+      },
+      symbol: {
+        markerType: 'ellipse',
+        markerFill: '#1bbc9b',
+        markerHeight: 5,
+        markerWidth: 5
+      }
+    }
+  ]
+
+  // meshNodeLayer = new maptalks.GeoJSONVectorTileLayer('geo', {
+  //   data: meshNodes,
+  //   style
+  // }).addTo(window.map)
+  // 使用 fromJSON 方法将 GeoJSON 转换为 Geometry 对象
+  const geometry = maptalks.Geometry.fromJSON(meshNodes)
+
+  meshNodeLayer = new maptalks.PointLayer('meshPoints').addGeometry(
+    geometry,
+    true
+  )
+  meshNodeLayer.addTo(window.map).setStyle(style)
+  meshNodeLayer.on('dataload', (e) => {
+    window.map.fitExtent(e.extent)
+  })
+}
+
+function removeMeshNode() {
+  if (meshNodeLayer) {
+    meshNodeLayer.remove()
+    meshNodeLayer = null // 清空图层引用
+  }
+}
+
+/**
+ *   添加mesh网格
+ */
+let meshNetsLayer // 保存图层引用
+
+function addMeshNets(meshJson) {
+  meshNetsLayer = new maptalks.VectorLayer('vector2mesh').addTo(window.map)
+  var editOption = {
+    draggable: false,
+    fixAspectRatio: true,
+    centerHandleSymbol: {
+      markerType: 'ellipse',
+      markerFill: 'red',
+      markerWidth: 5,
+      markerHeight: 5
+    },
+    vertexHandleSymbol: {
+      markerType: 'ellipse',
+      markerFill: 'blue',
+      markerWidth: 8,
+      markerHeight: 8
+    },
+    newVertexHandleSymbol: {
+      markerType: 'ellipse',
+      markerFill: 'green',
+      markerWidth: 5,
+      markerHeight: 5
+    }
+  }
+  const autoAdsorb = new maptalks.Autoadsorb({ layers: [meshNetsLayer] })
+  autoAdsorb.setMode('vertux')
+  autoAdsorb.setDistance(20) //吸附容差
+  meshJson.features.forEach((element) => {
+    // 提取属性
+    const properties = element.properties || {}
+    var p = new maptalks.Polygon(element.geometry.coordinates, {
+      editable: true,
+      draggable: false,
+      properties: properties // 将属性添加到多边形对象
+    })
+      .setSymbol({ polygonFill: '#000000', polygonOpacity: 0.3 })
+      .addTo(meshNetsLayer)
+    p.on('contextmenu', () => {
+      let geometry = p
+      if (geometry.isEditing()) {
+        geometry.endEdit()
+        autoAdsorb.refreshTargets()
+      } else {
+        autoAdsorb.bindGeometry(geometry)
+        geometry.startEdit(editOption)
+      }
+    })
+    // 添加撤销和重做事件监听器
+    p.on('editrecord', () => {
+      undoStack.push(p)
+      redoStack = [] // 编辑新操作时清空重做堆栈
+    })
+    // 绑定撤销和重做事件
+    p.on('undoedit', () => {
+      redoStack.push(p) // 将当前操作放入重做堆栈
+      undoStack.pop() // 从撤销堆栈移除最后一个操作
+    })
+    p.on('redoedit', () => {
+      undoStack.push(p) // 将当前操作放入撤销堆栈
+      redoStack.pop() // 从重做堆栈移除最后一个操作
+    })
+    p.on('handledragstart', () => {
+      p.on('handledragend', () => {
+        p.endEdit()
+        // undoeditMesh()
+        // redoeditMesh()
+      })
+    })
+    setTimeout(() => {
+      autoAdsorb.bindGeometry(p)
+    }, 10)
+  })
+}
+
+function removeMeshNets() {
+  if (meshNetsLayer) {
+    meshNetsLayer.remove()
+    meshNetsLayer = null // 清空图层引用
+  }
+}
+
+/**
+ * 添加等值线等值面
+ */
+let meshIsoLinesLayer // 保存图层引用
+
+function MeshIsoLines(meshNodes, meshJson) {
+  var colorChart = [
+    '#0000FF',
+    '#0033FF',
+    '#0066FF',
+    '#0099FF',
+    '#00CCFF',
+    '#00FFFF',
+    '#33FFCC',
+    '#66FF99',
+    '#99FF66',
+    '#CCFF33',
+    '#FFFF00',
+    '#FFCC00',
+    '#FF9900',
+    '#FF6600',
+    '#FF3300',
+    '#FF0000',
+    '#CC0000'
+  ]
+
+  const interpolate_options = {
+    gridType: 'points',
+    property: 'depth',
+    units: 'degrees',
+    weight: 10
+  }
+
+  var grid = turf.interpolate(meshNodes, 0.05, interpolate_options)
+  const depths = meshNodes.features.map((feature) => feature.properties.depth)
+  const minDepth = Math.min(...depths)
+  const maxDepth = Math.max(...depths)
+  const numberOfBreaks = colorChart.length
+  const interval = (maxDepth - minDepth) / (numberOfBreaks - 1)
+  const breaks = Array.from(
+    { length: numberOfBreaks },
+    (_, i) => minDepth + i * interval
+  )
+  const color = colorChart.map((color) => {
+    return { fill: color }
+  })
+  const isolines_options = {
+    zProperty: 'depth',
+    commonProperties: {
+      'fill-opacity': 0.7
+    },
+    breaksProperties: color
+  }
+  let gridIsobands = turf.isobands(grid, breaks, isolines_options)
+  gridIsobands = turf.flatten(gridIsobands)
+  var dissolved = turf.dissolve(meshJson)
+  const features = []
+  gridIsobands.features.forEach((layer1) => {
+    dissolved.features.forEach((layer2) => {
+      let intersection = turf.intersect(
+        turf.featureCollection([layer1, layer2])
+      )
+      if (intersection != null) {
+        intersection.properties = layer1.properties
+        intersection.id = Math.random() * 100000
+        features.push(intersection)
+      }
+    })
+  })
+
+  const geojson = turf.featureCollection(features)
+
+  meshIsoLinesLayer = new maptalks.VectorLayer('meshISO').addTo(window.map)
+
+  const geo = new maptalks.GeoJSON.toGeometry(geojson, (geometry) => {
+    geometry.config('symbol', {
+      lineColor: '#000000',
+      lineWidth: 0.2,
+      lineDasharray: null,
+      lineOpacity: 1,
+      polygonFill: geometry.properties.fill,
+      polygonOpacity: geometry.properties['fill-opacity']
+    })
+    geometry.addTo(meshIsoLinesLayer)
+  })
+}
+
+function removeMeshIsoLines() {
+  if (meshIsoLinesLayer) {
+    meshIsoLinesLayer.remove()
+    meshIsoLinesLayer = null // 清空图层引用
+  }
+}
+function exportToGeoJSON() {
+  // 获取地图上的所有图层
+  const layer = map.getLayer('vector2mesh')
+
+  const geoJSON = {
+    type: 'FeatureCollection',
+    features: []
+  }
+
+  const geometries = layer.getGeometries()
+
+  geometries.forEach((geometry) => {
+    const geoJSONFeature = geometry.toGeoJSON()
+    geoJSON.features.push(geoJSONFeature)
+  })
+
+  // 将GeoJSON对象转换为字符串并导出
+  const geoJSONString = JSON.stringify(geoJSON)
+
+  downloadGeoJSON(geoJSONString, 'map-data.geojson')
+  return geoJSON
+}
+/**
+ * 导出和下载
+ * @param {*} nodes
+ * @param {*} nets
+ */
+function exportToMesh(nodes, nets) {
+  maprequest.http.UploadGeoJson2mesh('/json2mesh', nodes, nets)
+}
+function downloadGeoJSON(geoJSONString, filename) {
+  const blob = new Blob([geoJSONString], { type: 'application/json' })
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+/**
+ *  重做和回退
+ *  用于存储编辑历史的堆栈
+ */
+let undoStack = []
+let redoStack = []
+
+function undoeditMesh() {
+  if (undoStack.length > 0) {
+    const lastGeometry = undoStack.pop() // 从撤销堆栈中取出最后一个几何图形
+    lastGeometry.undoEdit() // 撤销该几何图形的编辑操作
+    redoStack.push(lastGeometry) // 将该几何图形放入重做堆栈
+  }
+}
+function redoeditMesh() {
+  if (redoStack.length > 0) {
+    const lastGeometry = redoStack.pop() // 从重做堆栈中取出最后一个几何图形
+    lastGeometry.redoEdit() // 重做
+    undoStack.push(lastGeometry) //// 将该几何图形放入撤销堆栈
+  }
+}
+/**
+ * 网格偏移
+ */
+function offsetMeshNets(layerName) {
+  // 获取图层对象
+  var layer = map.getLayer('vector2mesh') // 替换为您的图层名称
+
+  // 获取图层中的所有要素
+  var geometries = layer.getGeometries()
+
+  // 假设您有一个参考点（目标偏移位置）
+  var targetPoint = [130.14, 40.28]
+
+  // 将所有几何对象组合为 FeatureCollection 以批量处理
+  var featureCollection = {
+    type: 'FeatureCollection',
+    features: geometries.map(function (geometry) {
+      return geometry.toGeoJSON()
+    })
+  }
+
+  // 1. 使用 turf.union 或 turf.dissolve 合并所有要素
+  var mergedFeature = turf.dissolve(featureCollection)
+
+  // 2. 计算合并后网格整体的中心点
+  var overallCenter = turf.center(mergedFeature).geometry.coordinates
+
+  // 3. 计算从中心点到目标点的偏移方向和距离
+  var distance = turf.distance(overallCenter, targetPoint, {
+    units: 'kilometers'
+  })
+  var direction = turf.bearing(overallCenter, targetPoint)
+
+  // 4. 对每个网格要素进行整体偏移
+  featureCollection.features.forEach(function (feature) {
+    turf.transformTranslate(feature, distance, direction, {
+      units: 'kilometers',
+      mutate: true
+    })
+  })
+
+  // 5. 更新图层中的几何对象
+  geometries.forEach(function (geometry, index) {
+    geometry.setCoordinates(
+      featureCollection.features[index].geometry.coordinates
+    )
+  })
+
+  return featureCollection
+}
+
+/**
+ * 对GeoJSON点集进行处理
+ * @param {Object} pointCollection - 一个GeoJSON格式的点集合 (FeatureCollection)
+ * @param {Array} targetPoint - 目标偏移位置 [lng, lat]
+ * @param {string} unit - 偏移单位 ('kilometers', 'meters', 'degrees', etc.)
+ * @returns {Object} - 处理后的GeoJSON点集合
+ */
+function offsetMeshPoints(layerName) {
+  // 获取图层对象
+  var layer = map.getLayer(layerName) // 替换为您的图层名称
+
+  // 获取图层中的所有要素
+  var geometries = layer.getGeometries()
+
+  // 假设您有一个参考点（目标偏移位置）
+  var targetPoint = [130.14, 40.28]
+
+  // // 检查输入是否为FeatureCollection类型
+  // if (pointCollection.type !== 'FeatureCollection') {
+  //   throw new Error('输入的GeoJSON对象必须是FeatureCollection类型')
+  // }
+  // 将所有几何对象组合为 FeatureCollection 以批量处理
+  var featureCollection = {
+    type: 'FeatureCollection',
+    features: geometries.map(function (geometry) {
+      return geometry.toGeoJSON()
+    })
+  }
+  // 计算点集的中心点
+  var overallCenter = turf.center(featureCollection).geometry.coordinates
+
+  // 计算从中心点到目标点的偏移方向和距离
+  var distance = turf.distance(overallCenter, targetPoint, { units: 'miles' })
+  var direction = turf.bearing(overallCenter, targetPoint)
+
+  // 对点集中的每个点进行偏移
+  featureCollection.features.forEach(function (feature) {
+    if (feature.geometry.type === 'Point') {
+      turf.transformTranslate(feature, distance, direction, {
+        units: 'miles',
+        mutate: true
+      })
+    }
+  })
+  //  更新图层中的几何对象
+  geometries.forEach(function (geometry, index) {
+    geometry.setCoordinates(
+      featureCollection.features[index].geometry.coordinates
+    )
+  })
+  // 返回处理后的点集
+  return featureCollection
+}
+
+export default {
+  addMeshNode,
+  addMeshNets,
+  MeshIsoLines,
+  removeMeshNets,
+  removeMeshNode,
+  removeMeshIsoLines,
+  exportToGeoJSON,
+  undoeditMesh,
+  redoeditMesh,
+  exportToMesh,
+  offsetMeshNets,
+  offsetMeshPoints
+}

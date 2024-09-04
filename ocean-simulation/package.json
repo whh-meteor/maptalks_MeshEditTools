@@ -1,0 +1,53 @@
+{
+  "name": "vue-cesium-example",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "serve": "vue-cli-service serve",
+    "build": "vue-cli-service build",
+    "test:unit": "vue-cli-service test:unit",
+    "lint": "vue-cli-service lint"
+  },
+  "dependencies": {
+    "@cesium-extends/geojson-render": "^1.0.5",
+    "@maptalks/gl-layers": "0.31.1",
+    "@sakitam-gis/maptalks-wind": "^2.0.4",
+    "@turf/turf": "^7.1.0",
+    "axios": "^1.7.5",
+    "cesium": "1.118.2",
+    "cesium-extends": "^1.8.18",
+    "cesium-particle": "^0.9.1",
+    "core-js": "3.25.0",
+    "dat.gui": "^0.7.9",
+    "element-ui": "^2.15.14",
+    "less-loader": "^12.2.0",
+    "maptalks": "^0.49.5",
+    "proj4": "^2.12.0",
+    "three": "^0.167.1",
+    "tiff-imagery-provider": "^2.12.1",
+    "vue": "2.7.10",
+    "vue-router": "3.6.5",
+    "vuex": "3.6.2"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.19.0",
+    "@babel/plugin-transform-private-methods": "^7.25.4",
+    "@vue/cli-plugin-babel": "5.0.8",
+    "@vue/cli-plugin-router": "5.0.8",
+    "@vue/cli-plugin-unit-jest": "5.0.8",
+    "@vue/cli-plugin-vuex": "5.0.8",
+    "@vue/cli-service": "5.0.8",
+    "@vue/test-utils": "1.3.0",
+    "copy-webpack-plugin": "11.0.0",
+    "jest": "27.5.1",
+    "less": "^4.2.0",
+    "node-polyfill-webpack-plugin": "^2.0.1",
+    "prettier": "2.7.1",
+    "sass": "1.54.8",
+    "sass-loader": "13.0.2",
+    "vue-drag-resize": "^1.5.4",
+    "vue-template-compiler": "2.7.10",
+    "webpack": "5.92.1",
+    "webpack-cli": "5.1.4"
+  }
+}
