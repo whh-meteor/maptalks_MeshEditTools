@@ -8,13 +8,15 @@
         <!-- <input type="file" @change="getFile2($event)" /> -->
         <el-button @click="submit($event)" type="danger">上传mesh文件</el-button>
         <el-button @click="loadMeshNets()" type="primary">加载mesh网格</el-button>
+
         <el-button @click="MeshOffset()">网格偏移</el-button>
         <!-- <el-button @click="backToLastStep()">撤销</el-button>
         <el-button @click="backToNextStep()">重做</el-button> -->
-        <el-button @click="loadMeshNodes()" type="primary">加载mesh节点</el-button>
-        <el-button @click="loadMeshDepth()" type="primary">加载水深插值</el-button>
+        <!-- <el-button @click="loadMeshNodes()" type="primary">加载mesh节点</el-button> -->
+        <el-button @click="loadMeshDepth()" type="primary">计算水深插值</el-button>
         <el-button @click="removeMeshNets()">移除mesh网格</el-button>
-        <el-button @click="removeMeshNodes()">移除mesh节点</el-button>
+        <el-button @click="hideLabels()">隐藏标注</el-button>
+        <!-- <el-button @click="removeMeshNodes()">移除mesh节点</el-button> -->
         <el-button @click="removeMeshDepth()">移除水深插值</el-button>
 
         <el-button @click="exportMeshNets()" type="info">导出网格</el-button>
@@ -80,7 +82,8 @@ export default {
       meshconfig.addMeshNets(this.meshNets)
     },
     loadMeshDepth() {
-      meshconfig.MeshIsoLines(this.meshNodes, this.meshNets)
+      meshconfig.MeshIsoLines(this.meshNets)
+      // meshconfig.convertPolygonToPoints(this.meshNets)
     },
     removeMeshNets() {
       meshconfig.removeMeshNets()
@@ -105,7 +108,7 @@ export default {
     },
     MeshOffset() {
       this.meshNets = meshconfig.offsetMeshNets("vector2mesh")
-      this.meshNodes = meshconfig.offsetMeshPoints("meshPoints")
+      this.meshNodes = meshconfig.offsetMeshPoints("labels")
     }
   }
 }

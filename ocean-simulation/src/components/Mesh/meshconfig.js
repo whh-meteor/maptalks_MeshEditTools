@@ -60,11 +60,15 @@ function removeMeshNode() {
 /**
  *   添加mesh网格
  */
-let meshNetsLayer // 保存图层引用
 
+let meshNetsLayer // 保存图层引用
+// let vertexMap = new Map() // 用于存储顶点与三角形的映射关系
 function addMeshNets(meshJson) {
   meshNetsLayer = new maptalks.VectorLayer('vector2mesh').addTo(window.map)
-  var editOption = {
+  let vertexMap = new Map() // 记录顶点id到三角形的映射关系
+  let labelLayer = new maptalks.VectorLayer('labels').addTo(window.map) // 用于显示ID的图层
+
+  const editOption = {
     draggable: false,
     fixAspectRatio: true,
     centerHandleSymbol: {
@@ -86,19 +90,67 @@ function addMeshNets(meshJson) {
       markerHeight: 5
     }
   }
+
   const autoAdsorb = new maptalks.Autoadsorb({ layers: [meshNetsLayer] })
   autoAdsorb.setMode('vertux')
-  autoAdsorb.setDistance(20) //吸附容差
-  meshJson.features.forEach((element) => {
-    // 提取属性
+  autoAdsorb.setDistance(20) // 吸附容差
+
+  const tolerance = 0.000001 // 设置容差值，允许小的坐标误差
+
+  // 比较坐标是否在容差范围内
+  function areCoordsEqual(coord1, coord2, tolerance = 0.000001) {
+    return (
+      Math.abs(coord1[0] - coord2[0]) < tolerance &&
+      Math.abs(coord1[1] - coord2[1]) < tolerance
+    )
+  }
+
+  // 创建网格三角形
+  meshJson.features.forEach((element, triangleIndex) => {
     const properties = element.properties || {}
-    var p = new maptalks.Polygon(element.geometry.coordinates, {
+    const coordinates = element.geometry.coordinates[0] // 获取三角形的顶点坐标
+    const pointsProperties = properties.points_properties || [] // 获取点的属性
+
+    // 创建三角形对象
+    let p = new maptalks.Polygon(coordinates, {
       editable: true,
       draggable: false,
       properties: properties // 将属性添加到多边形对象
     })
       .setSymbol({ polygonFill: '#000000', polygonOpacity: 0.3 })
       .addTo(meshNetsLayer)
+
+    // 显示三角形ID
+    const centerCoord = p.getCenter() // 获取三角形中心点
+    new maptalks.Label(`Triangle ID: ${triangleIndex}`, centerCoord, {
+      textSize: 14,
+      box: true,
+      padding: [6, 2],
+      textFill: '#f00',
+      boxFill: '#fff',
+      boxOpacity: 0.6
+    }).addTo(labelLayer)
+
+    // 记录每个顶点的id与三角形的映射关系
+    pointsProperties.forEach((pointProp, index) => {
+      const id = pointProp.id // 获取顶点的id
+      if (!vertexMap.has(id)) {
+        vertexMap.set(id, [])
+      }
+      vertexMap.get(id).push(p) // 将三角形与顶点id进行关联
+
+      // 显示顶点ID
+      const vertexCoord = coordinates[index] // 获取该顶点的坐标
+      new maptalks.Label(`Vertex ID: ${id}`, vertexCoord, {
+        textSize: 12,
+        box: true,
+        padding: [6, 2],
+        textFill: '#00f',
+        boxFill: '#fff',
+        boxOpacity: 0.6
+      }).addTo(labelLayer)
+    })
+
     p.on('contextmenu', () => {
       let geometry = p
       if (geometry.isEditing()) {
@@ -109,32 +161,169 @@ function addMeshNets(meshJson) {
         geometry.startEdit(editOption)
       }
     })
-    // 添加撤销和重做事件监听器
-    p.on('editrecord', () => {
-      undoStack.push(p)
-      redoStack = [] // 编辑新操作时清空重做堆栈
-    })
-    // 绑定撤销和重做事件
-    p.on('undoedit', () => {
-      redoStack.push(p) // 将当前操作放入重做堆栈
-      undoStack.pop() // 从撤销堆栈移除最后一个操作
-    })
-    p.on('redoedit', () => {
-      undoStack.push(p) // 将当前操作放入撤销堆栈
-      redoStack.pop() // 从重做堆栈移除最后一个操作
-    })
+
+    let initialCoords
+
+    // 在顶点拖动开始时记录初始坐标
     p.on('handledragstart', () => {
-      p.on('handledragend', () => {
-        p.endEdit()
-        // undoeditMesh()
-        // redoeditMesh()
-      })
+      initialCoords = p
+        .getCoordinates()[0]
+        .map((coord) =>
+          Array.isArray(coord) ? coord.slice() : [coord.x, coord.y]
+        )
+      console.log('Initial Coordinates:', initialCoords)
     })
+
+    // 在顶点拖动结束后更新相邻的三角形
+    p.on('handledragend', (event) => {
+      const geometry = event.target // 获取触发事件的几何对象
+      const finalCoords = geometry
+        .getCoordinates()[0]
+        .map((coord) => (Array.isArray(coord) ? coord : [coord.x, coord.y]))
+
+      console.log('Final Coordinates:', finalCoords)
+
+      let draggedIndex = -1
+
+      // 查找哪个顶点发生了变化，使用容差进行比较
+      for (let i = 0; i < finalCoords.length; i++) {
+        if (!areCoordsEqual(finalCoords[i], initialCoords[i], tolerance)) {
+          draggedIndex = i
+          break
+        }
+      }
+
+      if (draggedIndex !== -1) {
+        const movedCoord = finalCoords[draggedIndex] // 获取当前移动的顶点
+        console.log('Dragged Vertex Index:', draggedIndex)
+        console.log('Moved Coordinate:', movedCoord)
+
+        const pointProp = pointsProperties[draggedIndex] // 根据索引获取点属性
+        const id = pointProp.id // 获取顶点的id
+        const triangles = vertexMap.get(id) // 使用id进行查找
+
+        console.log('Vertex ID:', id)
+        console.log('Associated Triangles:', triangles)
+
+        if (triangles) {
+          console.log('Updating triangles:', triangles) // 调试信息
+
+          // 更新所有与该顶点相关的三角形
+          triangles.forEach((triangle) => {
+            const triangleCoords = triangle
+              .getCoordinates()[0]
+              .map((coord) =>
+                Array.isArray(coord) ? coord : [coord.x, coord.y]
+              )
+
+            const i = triangleCoords.findIndex((triangleCoord) =>
+              areCoordsEqual(
+                triangleCoord,
+                initialCoords[draggedIndex],
+                tolerance
+              )
+            )
+
+            if (i !== -1) {
+              // 更新当前顶点，但保持其他两个顶点不变
+              triangleCoords[i] = movedCoord // 更新拖动顶点的坐标
+              console.log(' 三角形坐标:')
+              console.log(triangleCoords)
+              // 保证三角形的闭合性，复制第一个顶点到最后一个顶点
+              triangleCoords[triangleCoords.length - 1] = triangleCoords[0]
+
+              console.log('更新后的三角形坐标:')
+              console.log(triangleCoords)
+              triangle.setCoordinates([triangleCoords]) // 更新三角形的坐标
+            }
+          })
+        } else {
+          console.error('No triangles found for the id:', id)
+        }
+      } else {
+        console.error('No vertex was detected as dragged.')
+      }
+    })
+
     setTimeout(() => {
       autoAdsorb.bindGeometry(p)
     }, 10)
   })
 }
+
+// function addMeshNets(meshJson) {
+//   meshNetsLayer = new maptalks.VectorLayer('vector2mesh').addTo(window.map)
+//   var editOption = {
+//     draggable: false,
+//     fixAspectRatio: true,
+//     centerHandleSymbol: {
+//       markerType: 'ellipse',
+//       markerFill: 'red',
+//       markerWidth: 5,
+//       markerHeight: 5
+//     },
+//     vertexHandleSymbol: {
+//       markerType: 'ellipse',
+//       markerFill: 'blue',
+//       markerWidth: 8,
+//       markerHeight: 8
+//     },
+//     newVertexHandleSymbol: {
+//       markerType: 'ellipse',
+//       markerFill: 'green',
+//       markerWidth: 5,
+//       markerHeight: 5
+//     }
+//   }
+//   const autoAdsorb = new maptalks.Autoadsorb({ layers: [meshNetsLayer] })
+//   autoAdsorb.setMode('vertux')
+//   autoAdsorb.setDistance(20) //吸附容差
+//   meshJson.features.forEach((element) => {
+//     // 提取属性
+//     const properties = element.properties || {}
+//     var p = new maptalks.Polygon(element.geometry.coordinates, {
+//       editable: true,
+//       draggable: false,
+//       properties: properties // 将属性添加到多边形对象
+//     })
+//       .setSymbol({ polygonFill: '#000000', polygonOpacity: 0.3 })
+//       .addTo(meshNetsLayer)
+//     p.on('contextmenu', () => {
+//       let geometry = p
+//       if (geometry.isEditing()) {
+//         geometry.endEdit()
+//         autoAdsorb.refreshTargets()
+//       } else {
+//         autoAdsorb.bindGeometry(geometry)
+//         geometry.startEdit(editOption)
+//       }
+//     })
+//     // 添加撤销和重做事件监听器
+//     p.on('editrecord', () => {
+//       undoStack.push(p)
+//       redoStack = [] // 编辑新操作时清空重做堆栈
+//     })
+//     // 绑定撤销和重做事件
+//     p.on('undoedit', () => {
+//       redoStack.push(p) // 将当前操作放入重做堆栈
+//       undoStack.pop() // 从撤销堆栈移除最后一个操作
+//     })
+//     p.on('redoedit', () => {
+//       undoStack.push(p) // 将当前操作放入撤销堆栈
+//       redoStack.pop() // 从重做堆栈移除最后一个操作
+//     })
+//     p.on('handledragstart', () => {
+//       p.on('handledragend', () => {
+//         p.endEdit()
+//         // undoeditMesh()
+//         // redoeditMesh()
+//       })
+//     })
+//     setTimeout(() => {
+//       autoAdsorb.bindGeometry(p)
+//     }, 10)
+//   })
+// }
 
 function removeMeshNets() {
   if (meshNetsLayer) {
@@ -148,7 +337,8 @@ function removeMeshNets() {
  */
 let meshIsoLinesLayer // 保存图层引用
 
-function MeshIsoLines(meshNodes, meshJson) {
+function MeshIsoLines(meshJson) {
+  var meshNodes = convertPolygonToPoints(meshJson)
   var colorChart = [
     '#0000FF',
     '#0033FF',
@@ -229,7 +419,41 @@ function MeshIsoLines(meshNodes, meshJson) {
     geometry.addTo(meshIsoLinesLayer)
   })
 }
+function convertPolygonToPoints(geojson) {
+  let points = []
 
+  geojson.features.forEach((feature) => {
+    if (
+      feature.geometry.type === 'Polygon' &&
+      feature.properties.points_properties
+    ) {
+      const coordinates = feature.geometry.coordinates[0] // 获取多边形的坐标数组
+      const properties = feature.properties.points_properties
+
+      coordinates.forEach((coord, index) => {
+        if (properties[index]) {
+          points.push({
+            geometry: {
+              coordinates: coord,
+              type: 'Point'
+            },
+            properties: {
+              depth: properties[index].depth,
+              id: properties[index].id,
+              value: properties[index].value
+            },
+            type: 'Feature'
+          })
+        }
+      })
+    }
+  })
+
+  return {
+    type: 'FeatureCollection',
+    features: points
+  }
+}
 function removeMeshIsoLines() {
   if (meshIsoLinesLayer) {
     meshIsoLinesLayer.remove()
@@ -413,5 +637,6 @@ export default {
   redoeditMesh,
   exportToMesh,
   offsetMeshNets,
-  offsetMeshPoints
+  offsetMeshPoints,
+  convertPolygonToPoints
 }

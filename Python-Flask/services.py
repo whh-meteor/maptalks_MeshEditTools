@@ -31,6 +31,152 @@ def Mesh_nodes_to_Triangle_Json(mesh):
             if not line:
                 continue
 
+            # 分割行内容
+            parts = line.split()
+
+            # 处理节点数据
+            if len(parts) == 5:
+                nodes.append({
+                    "id": int(parts[0]),
+                    "x": float(parts[1]),
+                    "y": float(parts[2]),
+                    "depth": float(parts[3]),
+                    "value": float(parts[4])
+                })
+            # 处理三角形数据
+            elif len(parts) == 4:
+                triangles.append({
+                    "id": int(parts[0]),
+                    "node_ids": list(map(int, parts[1:4]))
+                })
+            else:
+                print(f"Unexpected line format: {line}")
+
+        print(f"Nodes parsed: {len(nodes)}")
+        print(f"Triangles parsed: {len(triangles)}")
+
+        return header, nodes, triangles
+
+    # 生成三角网 GeoJSON 文件
+    def generate_triangular_geojson(nodes, triangles, output_file):
+        # 创建字典以方便通过 id 查找节点
+        node_dict = {node["id"]: node for node in nodes}
+        
+        features = []
+        for triangle in triangles:
+            # 根据三角形的节点 id 查找对应的坐标
+            coords = [
+                {
+                    "coordinates": [node_dict[triangle["node_ids"][0]]["x"], node_dict[triangle["node_ids"][0]]["y"]],
+                    "properties": {
+                        "depth": node_dict[triangle["node_ids"][0]]["depth"],
+                        "value": node_dict[triangle["node_ids"][0]]["value"],
+                        "id": node_dict[triangle["node_ids"][0]]["id"]
+                    }
+                },
+                {
+                    "coordinates": [node_dict[triangle["node_ids"][1]]["x"], node_dict[triangle["node_ids"][1]]["y"]],
+                    "properties": {
+                        "depth": node_dict[triangle["node_ids"][1]]["depth"],
+                        "value": node_dict[triangle["node_ids"][1]]["value"],
+                        "id": node_dict[triangle["node_ids"][1]]["id"]
+                    }
+                },
+                {
+                    "coordinates": [node_dict[triangle["node_ids"][2]]["x"], node_dict[triangle["node_ids"][2]]["y"]],
+                    "properties": {
+                        "depth": node_dict[triangle["node_ids"][2]]["depth"],
+                        "value": node_dict[triangle["node_ids"][2]]["value"],
+                        "id": node_dict[triangle["node_ids"][2]]["id"]
+                    }
+                },
+                {
+                    "coordinates": [node_dict[triangle["node_ids"][0]]["x"], node_dict[triangle["node_ids"][0]]["y"]],
+                    "properties": {
+                        "depth": node_dict[triangle["node_ids"][0]]["depth"],
+                        "value": node_dict[triangle["node_ids"][0]]["value"],
+                        "id": node_dict[triangle["node_ids"][0]]["id"]
+                    }
+                }  # 闭合三角形
+            ]
+            feature = {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[coord["coordinates"] for coord in coords]]
+                },
+                "properties": {
+                    "id": triangle["id"],
+                    "points_properties": [coord["properties"] for coord in coords[:3]]  # 存储每个点的属性
+                }
+            }
+            features.append(feature)
+        
+        # 生成 GeoJSON 格式的数据
+        geojson = {
+            "type": "FeatureCollection",
+            "features": features
+        }
+        return geojson
+
+    # 生成节点 GeoJSON 文件
+    def generate_node_geojson(nodes, output_file, depth, value):
+        features = []
+        for node in nodes:
+            feature = {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [node["x"], node["y"]]
+                },
+                "properties": {
+                    "id": node["id"],
+                    depth: node[depth],
+                    value: node[value]
+                }
+            }
+            features.append(feature)
+        
+        # 生成 GeoJSON 格式的数据
+        geojson = {
+            "type": "FeatureCollection",
+            "features": features
+        }
+        return geojson
+
+    # 读取和解析 mesh 文件
+    header, nodes, triangles = parse_mesh_file(mesh)
+
+    # 如果 nodes 和 triangles 不为空，生成 GeoJSON
+    if nodes and triangles:
+        # 生成三角网 GeoJSON 文件
+        nets = generate_triangular_geojson(nodes, triangles, './triangular_geojson.geojson')
+
+        # 生成节点 GeoJSON 文件
+        nodes = generate_node_geojson(nodes, '../nodes.geojson', 'depth', 'value')
+        return [nodes, nets]
+    else:
+        print("No nodes or triangles found.")
+
+def Mesh_nodes_to_Triangle_Json_unse(mesh):
+
+    def parse_mesh_file(mesh_file):
+        with open(mesh_file, 'r') as file:
+            lines = file.readlines()
+
+        # 跳过头部信息行
+        header = lines[0].strip()
+        nodes = []
+        triangles = []
+        
+        # 从第二行开始处理
+        for line in lines[1:]:
+            line = line.strip()
+
+            # 跳过空行
+            if not line:
+                continue
+
             # 打印当前解析的行
             # print(f"Parsing line: {line}")
 

@@ -37,10 +37,10 @@ def init_routes(app):
                     return jsonify({"message": "一个或多个文件没有名称"}), 400
                 # 保存文件
                 filename = secure_filename(file.filename)
-                file.save(f"F:/Desktop/【LTGK】海洋一所/Python-Flask/tempfile/{filename}")
+                file.save(f"F:/Desktop/【LTGK】海洋一所/【Demo】/Python-Flask/tempfile/{filename}")
                 saved_files.append(filename)
                 # 逻辑代码
-                geojson=dat_to_geojson_with_conversion(f"F:/Desktop/【LTGK】海洋一所/Python-Flask/tempfile/{filename}")
+                geojson=dat_to_geojson_with_conversion(f"F:/Desktop/【LTGK】海洋一所/【Demo】/Python-Flask/tempfile/{filename}")
                 geojson_84 =  transPoint2WGS84(geojson)
             return jsonify({"message": "文件上传成功", "files": saved_files,"geojson":geojson_84}), 200
 
@@ -70,9 +70,9 @@ def init_routes(app):
                     return jsonify({"message": "One or more files have no name"}), 400
 
                 filename = secure_filename(file.filename)
-                file.save(f"F:/Desktop/【LTGK】海洋一所/Python-Flask/tempfile/{filename}")
+                file.save(f"F:/Desktop/【LTGK】海洋一所/【Demo】/Python-Flask/tempfile/{filename}")
                 saved_files.append(filename)
-                geojson=Mesh_nodes_to_Triangle_Json(f"F:/Desktop/【LTGK】海洋一所/Python-Flask/tempfile/{filename}")
+                geojson=Mesh_nodes_to_Triangle_Json(f"F:/Desktop/【LTGK】海洋一所/【Demo】/Python-Flask/tempfile/{filename}")
 
             return jsonify({"message": "Files uploaded successfully", "files": saved_files,"geojson":geojson}), 200
 
