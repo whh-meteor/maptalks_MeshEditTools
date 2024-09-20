@@ -8,14 +8,15 @@
         <!-- <input type="file" @change="getFile2($event)" /> -->
         <el-button @click="submit($event)" type="danger">上传mesh文件</el-button>
         <el-button @click="loadMeshNets()" type="primary">加载mesh网格</el-button>
+        <el-button @click="isShowLabels()">显示/隐藏标注</el-button>
 
         <el-button @click="MeshOffset()">网格偏移</el-button>
-        <!-- <el-button @click="backToLastStep()">撤销</el-button>
-        <el-button @click="backToNextStep()">重做</el-button> -->
+        <el-button @click="backToLastStep()">撤销</el-button>
+        <!-- <el-button @click="backToNextStep()">重做</el-button> -->
         <!-- <el-button @click="loadMeshNodes()" type="primary">加载mesh节点</el-button> -->
         <el-button @click="loadMeshDepth()" type="primary">计算水深插值</el-button>
         <el-button @click="removeMeshNets()">移除mesh网格</el-button>
-        <el-button @click="hideLabels()">隐藏标注</el-button>
+
         <!-- <el-button @click="removeMeshNodes()">移除mesh节点</el-button> -->
         <el-button @click="removeMeshDepth()">移除水深插值</el-button>
 
@@ -39,11 +40,17 @@ export default {
       file: null,
       file2: null,
       meshNodes: null, //节点
-      meshNets: null //网格
+      meshNets: null, //网格
+      isShowLabel: true
     }
   },
   mounted() { },
   methods: {
+
+    isShowLabels() {
+      meshconfig.isShowLabels(!this.isShowLabel)
+      this.isShowLabel = !this.isShowLabel
+    },
     resize(newRect) { },
     getFile(event) {
       console.log(event)
@@ -98,7 +105,7 @@ export default {
       var nets = meshconfig.exportToGeoJSON()
       console.log("图层中的GeoJson")
       console.log(nets)
-      meshconfig.exportToMesh(this.meshNodes, nets)  // 原始json
+      meshconfig.exportToMesh(nets)  // 原始json
     },
     backToLastStep() {
       meshconfig.undoeditMesh()
@@ -108,7 +115,7 @@ export default {
     },
     MeshOffset() {
       this.meshNets = meshconfig.offsetMeshNets("vector2mesh")
-      this.meshNodes = meshconfig.offsetMeshPoints("labels")
+      this.meshNodes = meshconfig.offsetMeshPoints("meshlabels")
     }
   }
 }

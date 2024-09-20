@@ -23,3 +23,22 @@ pnpm-debug.log*
 *.sln
 *.sw?
 
+Python-Flask/static/data/GSHHS_DIS.cpg
+Python-Flask/static/data/GSHHS_DIS.dbf
+Python-Flask/static/data/GSHHS_DIS.prj
+Python-Flask/static/data/GSHHS_DIS.sbn
+Python-Flask/static/data/GSHHS_DIS.sbx
+Python-Flask/static/data/GSHHS_DIS.shp
+Python-Flask/static/data/GSHHS_DIS.shp.xml
+Python-Flask/static/data/GSHHS_DIS.shx
+Python-Flask/static/data/GSHHS_f_L1.dbf
+Python-Flask/static/data/GSHHS_f_L1.prj
+Python-Flask/static/data/GSHHS_f_L1.sbn
+Python-Flask/static/data/GSHHS_f_L1.sbx
+Python-Flask/static/data/GSHHS_f_L1.shp
+Python-Flask/static/data/GSHHS_f_L1.shx
+Python-Flask/res3_gpd.cpg
+Python-Flask/res3_gpd.dbf
+Python-Flask/res3_gpd.prj
+Python-Flask/res3_gpd.shp
+Python-Flask/res3_gpd.shx

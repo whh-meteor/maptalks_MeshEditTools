@@ -61,12 +61,12 @@ function removeMeshNode() {
  *   添加mesh网格
  */
 
-let meshNetsLayer // 保存图层引用
+let meshNetsLayer, labelLayer // 保存图层引用
 // let vertexMap = new Map() // 用于存储顶点与三角形的映射关系
 function addMeshNets(meshJson) {
   meshNetsLayer = new maptalks.VectorLayer('vector2mesh').addTo(window.map)
   let vertexMap = new Map() // 记录顶点id到三角形的映射关系
-  let labelLayer = new maptalks.VectorLayer('labels').addTo(window.map) // 用于显示ID的图层
+  labelLayer = new maptalks.VectorLayer('meshlabels').addTo(window.map) // 用于显示ID的图层
 
   const editOption = {
     draggable: false,
@@ -161,8 +161,22 @@ function addMeshNets(meshJson) {
         geometry.startEdit(editOption)
       }
     })
-
+    // 添加撤销和重做事件监听器
+    p.on('editrecord', () => {
+      undoStack.push(p)
+      redoStack = [] // 编辑新操作时清空重做堆栈
+    })
+    // 绑定撤销和重做事件
+    p.on('undoedit', () => {
+      redoStack.push(p) // 将当前操作放入重做堆栈
+      undoStack.pop() // 从撤销堆栈移除最后一个操作
+    })
+    p.on('redoedit', () => {
+      undoStack.push(p) // 将当前操作放入撤销堆栈
+      redoStack.pop() // 从重做堆栈移除最后一个操作
+    })
     let initialCoords
+    let affectedTriangles = []
 
     // 在顶点拖动开始时记录初始坐标
     p.on('handledragstart', () => {
@@ -171,12 +185,13 @@ function addMeshNets(meshJson) {
         .map((coord) =>
           Array.isArray(coord) ? coord.slice() : [coord.x, coord.y]
         )
+      affectedTriangles = []
       console.log('Initial Coordinates:', initialCoords)
     })
 
     // 在顶点拖动结束后更新相邻的三角形
     p.on('handledragend', (event) => {
-      const geometry = event.target // 获取触发事件的几何对象
+      const geometry = event.target
       const finalCoords = geometry
         .getCoordinates()[0]
         .map((coord) => (Array.isArray(coord) ? coord : [coord.x, coord.y]))
@@ -185,7 +200,7 @@ function addMeshNets(meshJson) {
 
       let draggedIndex = -1
 
-      // 查找哪个顶点发生了变化，使用容差进行比较
+      // 查找哪个顶点发生了变化
       for (let i = 0; i < finalCoords.length; i++) {
         if (!areCoordsEqual(finalCoords[i], initialCoords[i], tolerance)) {
           draggedIndex = i
@@ -194,19 +209,35 @@ function addMeshNets(meshJson) {
       }
 
       if (draggedIndex !== -1) {
-        const movedCoord = finalCoords[draggedIndex] // 获取当前移动的顶点
-        console.log('Dragged Vertex Index:', draggedIndex)
-        console.log('Moved Coordinate:', movedCoord)
-
-        const pointProp = pointsProperties[draggedIndex] // 根据索引获取点属性
-        const id = pointProp.id // 获取顶点的id
-        const triangles = vertexMap.get(id) // 使用id进行查找
-
-        console.log('Vertex ID:', id)
-        console.log('Associated Triangles:', triangles)
+        const movedCoord = finalCoords[draggedIndex]
+        const pointProp = pointsProperties[draggedIndex]
+        const id = pointProp.id
+        const triangles = vertexMap.get(id)
 
         if (triangles) {
-          console.log('Updating triangles:', triangles) // 调试信息
+          console.log('Updating triangles:', triangles)
+
+          // 存储撤销和重做信息
+          const affectedState = triangles.map((triangle) => ({
+            triangle,
+            originalCoords: triangle
+              .getCoordinates()[0]
+              .map((coord) =>
+                Array.isArray(coord) ? coord.slice() : [coord.x, coord.y]
+              ),
+            finalCoords: triangle
+              .getCoordinates()[0]
+              .map((coord) =>
+                Array.isArray(coord) ? coord.slice() : [coord.x, coord.y]
+              ) // 这里确保记录所有三角形的最终坐标
+          }))
+
+          // 添加拖动三角形的原始和最终坐标
+          affectedState.push({
+            triangle: p,
+            originalCoords: initialCoords,
+            finalCoords: finalCoords // 确保拖动三角形的最终坐标也被存储
+          })
 
           // 更新所有与该顶点相关的三角形
           triangles.forEach((triangle) => {
@@ -225,18 +256,15 @@ function addMeshNets(meshJson) {
             )
 
             if (i !== -1) {
-              // 更新当前顶点，但保持其他两个顶点不变
-              triangleCoords[i] = movedCoord // 更新拖动顶点的坐标
-              console.log(' 三角形坐标:')
-              console.log(triangleCoords)
-              // 保证三角形的闭合性，复制第一个顶点到最后一个顶点
-              triangleCoords[triangleCoords.length - 1] = triangleCoords[0]
-
-              console.log('更新后的三角形坐标:')
-              console.log(triangleCoords)
-              triangle.setCoordinates([triangleCoords]) // 更新三角形的坐标
+              // 更新当前顶点
+              triangleCoords[i] = movedCoord
+              triangleCoords[triangleCoords.length - 1] = triangleCoords[0] // 保证闭合
+              triangle.setCoordinates([triangleCoords])
             }
           })
+
+          undoStack.push(affectedState)
+          redoStack = []
         } else {
           console.error('No triangles found for the id:', id)
         }
@@ -250,7 +278,62 @@ function addMeshNets(meshJson) {
     }, 10)
   })
 }
+/**
+ *  重做和回退
+ *  用于存储编辑历史的堆栈
+ */
+let undoStack = []
+let redoStack = []
+function undoeditMesh() {
+  if (undoStack.length > 0) {
+    const lastAction = undoStack.pop() // 获取最后的操作
 
+    if (lastAction && Array.isArray(lastAction)) {
+      lastAction.forEach(({ triangle, originalCoords }) => {
+        if (triangle && Array.isArray(originalCoords)) {
+          // 恢复所有受影响三角形的原始坐标
+          triangle.setCoordinates([originalCoords])
+        } else {
+          console.error('Invalid triangle or originalCoords detected.')
+        }
+      })
+      redoStack.push(lastAction) // 将操作放入重做栈
+    } else {
+      console.error('Invalid undo action structure detected.')
+    }
+  } else {
+    console.warn('No more actions to undo.')
+  }
+}
+function redoeditMesh() {
+  if (redoStack.length > 0) {
+    const lastRedoAction = redoStack.pop() // 获取最后的重做操作
+
+    if (lastRedoAction && Array.isArray(lastRedoAction)) {
+      lastRedoAction.forEach(({ triangle, finalCoords }) => {
+        if (triangle && Array.isArray(finalCoords)) {
+          // 恢复所有受影响三角形的最终坐标
+          triangle.setCoordinates([finalCoords])
+        } else {
+          console.error('Invalid triangle or finalCoords detected.')
+        }
+      })
+      undoStack.push(lastRedoAction) // 将操作放入撤销栈
+    } else {
+      console.error('Invalid redo action structure detected.')
+    }
+  } else {
+    console.warn('No more actions to redo.')
+  }
+}
+
+function isShowLabels(bool) {
+  if (bool) {
+    window.map.getLayer('meshlabels').show()
+  } else {
+    window.map.getLayer('meshlabels').hide()
+  }
+}
 // function addMeshNets(meshJson) {
 //   meshNetsLayer = new maptalks.VectorLayer('vector2mesh').addTo(window.map)
 //   var editOption = {
@@ -332,6 +415,20 @@ function removeMeshNets() {
   }
 }
 
+// function undoeditMesh() {
+//   if (undoStack.length > 0) {
+//     const lastGeometry = undoStack.pop() // 从撤销堆栈中取出最后一个几何图形
+//     lastGeometry.undoEdit() // 撤销该几何图形的编辑操作
+//     redoStack.push(lastGeometry) // 将该几何图形放入重做堆栈
+//   }
+// }
+// function redoeditMesh() {
+//   if (redoStack.length > 0) {
+//     const lastGeometry = redoStack.pop() // 从重做堆栈中取出最后一个几何图形
+//     lastGeometry.redoEdit() // 重做
+//     undoStack.push(lastGeometry) //// 将该几何图形放入撤销堆栈
+//   }
+// }
 /**
  * 添加等值线等值面
  */
@@ -460,6 +557,12 @@ function removeMeshIsoLines() {
     meshIsoLinesLayer = null // 清空图层引用
   }
 }
+
+/**
+ * 导出和下载
+ * @param {*} nodes
+ * @param {*} nets
+ */
 function exportToGeoJSON() {
   // 获取地图上的所有图层
   const layer = map.getLayer('vector2mesh')
@@ -482,13 +585,8 @@ function exportToGeoJSON() {
   downloadGeoJSON(geoJSONString, 'map-data.geojson')
   return geoJSON
 }
-/**
- * 导出和下载
- * @param {*} nodes
- * @param {*} nets
- */
-function exportToMesh(nodes, nets) {
-  maprequest.http.UploadGeoJson2mesh('/json2mesh', nodes, nets)
+function exportToMesh(nets) {
+  maprequest.http.UploadGeoJson2mesh('/json2mesh', nets)
 }
 function downloadGeoJSON(geoJSONString, filename) {
   const blob = new Blob([geoJSONString], { type: 'application/json' })
@@ -499,27 +597,7 @@ function downloadGeoJSON(geoJSONString, filename) {
   link.click()
   document.body.removeChild(link)
 }
-/**
- *  重做和回退
- *  用于存储编辑历史的堆栈
- */
-let undoStack = []
-let redoStack = []
 
-function undoeditMesh() {
-  if (undoStack.length > 0) {
-    const lastGeometry = undoStack.pop() // 从撤销堆栈中取出最后一个几何图形
-    lastGeometry.undoEdit() // 撤销该几何图形的编辑操作
-    redoStack.push(lastGeometry) // 将该几何图形放入重做堆栈
-  }
-}
-function redoeditMesh() {
-  if (redoStack.length > 0) {
-    const lastGeometry = redoStack.pop() // 从重做堆栈中取出最后一个几何图形
-    lastGeometry.redoEdit() // 重做
-    undoStack.push(lastGeometry) //// 将该几何图形放入撤销堆栈
-  }
-}
 /**
  * 网格偏移
  */
@@ -638,5 +716,6 @@ export default {
   exportToMesh,
   offsetMeshNets,
   offsetMeshPoints,
-  convertPolygonToPoints
+  convertPolygonToPoints,
+  isShowLabels
 }

@@ -46,7 +46,18 @@ export default {
           subdomains: ['a', 'b', 'c', 'd'], // 设置子域
           attribution:
             '&copy; <a href="http://osm.org">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/">CARTO</a>' // 设置版权信息
-        })
+        }),
+        layerSwitcherControl: {
+          'position': 'top-right',
+          // title of base layers
+          'baseTitle': 'Base Layers',
+          // title of layers
+          'overlayTitle': 'Layers',
+          // layers you don't want to manage with layer switcher
+          'excludeLayers': [],
+          // css class of container element, maptalks-layer-switcher by default
+          'containerClass': 'maptalks-layer-switcher'
+        },
       })
       window.map = this.map
       var drawBox = mapconfig.DrawTools()

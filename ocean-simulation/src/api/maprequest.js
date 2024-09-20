@@ -25,12 +25,6 @@ http.UploadFile = function (url, data) {
         if (typeof data1 == 'string') {
           data = JSON.parse(data1)
         }
-        //这里提前处理返回的数据;
-        if (data.message && data.data === 'login.invalid.token') {
-          window.localStorage.removeItem('access-user')
-          alert('超时请重新登陆')
-          window.location.href = '/'
-        }
         return data
       }
     ],
@@ -49,13 +43,12 @@ http.UploadFile = function (url, data) {
 }
 
 /**
- * 发送两个GeoJSON对象到后端
+ * 发送GeoJSON对象到后端
  * @param url
- * @param geoJson1 第一个GeoJSON对象
- * @param geoJson2 第二个GeoJSON对象
+ * @param geojson1 第一个GeoJSON对象 nets 网格
  * @returns {AxiosPromise}
  */
-http.UploadGeoJson = function (url, geoJson1, geoJson2) {
+http.UploadGeoJson2mesh = function (url, geoJson1) {
   let config = {
     url: url,
     baseURL: _baseURL,
@@ -69,8 +62,7 @@ http.UploadGeoJson = function (url, geoJson1, geoJson2) {
 
   // 发送两个 GeoJSON 对象作为请求的 body
   const data = {
-    geoJson1: geoJson1,
-    geoJson2: geoJson2
+    geoJson1: geoJson1
   }
 
   return axios
